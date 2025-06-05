@@ -18,7 +18,7 @@ We have two types of esp controllers to use, either the ESP32 D1 or ESP3286
 <summary>ESP32 D1</summary>
 <img src="./assets/a1.png" alt="esp32 D1" width="200"/> <br>
 
-[pinout](https://lastminuteengineers.com/wemos-d1-mini-pinout-reference/)
+![Pinout for ESP32 D1](assets/pinout.png)
 
 </details>
 
@@ -103,10 +103,9 @@ alias get_idf='. $HOME/export-esp.sh'
 
 we can run `get_idf` befor building a different esp project. Remember to source the shell after updating your rc file.
 
-4.
-
 </details>
 <br>
+
 Once esp is setup on our computer we can try to build and run the project on our controller. I have created a template project called `dht-sensor`, run `cd dht-sensor` to move into the project and run it using: <br >
 
 ```
@@ -126,8 +125,43 @@ _If you got stuck at "Connecting...", hit the reset-button on the controller_
 
 ## Part 1: Getting data from the sensor (using lib)
 
-The first challenge is to create a program that reads sensor values at an interval. The first ting we need to so is
-The first thing we need to do wire our sensor and controller on the breadboard correctly. Once that is done we can driver
+-The first challenge is to create a program that reads sensor values at an interval. The first ting we need to so is
+-The first thing we need to do wire our sensor and controller on the breadboard correctly. Once that is done we can driver
+
+- +The first challenge is to create a program that reads sensor values at an interval. The first ting we need to so is
+  +The first thing we need to do wire our sensor and controller on the breadboard correctly. Once that is done we can driver
+  +++++++ Contents of side #2
+
+The first challenge is to create a program that reads sensor values at an interval.
+The first thing we need to do is wire our sensor and controller correctly.
+
+> [!TIP] > ![Wiring overview](./assets/esp32d1.png)
+> Check out [Arduino's tutorial](https://arduinogetstarted.com/tutorials/arduino-dht22) for details.
+
+### Pinout diagram
+
+Choose any GPIO pin you want, e.g. 4:
+
+![Pinout for ESP32 D1](assets/pinout.png)
+
+### Reading from the sensor
+
+Try checking out the [documentation for the DHT22-sensor](https://docs.rs/embedded-dht-rs/0.5.0/embedded_dht_rs/). See what they do and use for the DHT22-sensor.
+
+#### PinDriver
+
+This is confusing, so let's go through it together.
+
+We need to tell the controller which pins we are using and how (which state). We are going to _read_ data from the pin, but we also need to tell the sensor when to read, so we need a pin we can input and output to/from.
+
+```rust
+let pin = PinDriver::input_output_od(peripherals.pins.gpio4).unwrap();
+```
+
+#### Now create and read from the sensor, just log the output
+
+_NB_ The sensor might not give out data, so be gentle, allow it to error and try to read more than once if it fails.
+Set the delay to 1000us.
 
 <details>
 <summary>Solution 💡</summary>
