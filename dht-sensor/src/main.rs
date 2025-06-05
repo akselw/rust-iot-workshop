@@ -1,8 +1,4 @@
-use std::{thread::sleep, time::Duration};
-
-use embedded_dht_rs::dht22::Dht22;
-use esp_idf_svc::hal::{delay::Delay, gpio::PinDriver, prelude::Peripherals};
-use log::{info, warn};
+use log::info;
 
 fn main() {
     // It is necessary to call this function once. Otherwise some patches to the runtime
