@@ -1,10 +1,11 @@
-use std::thread::sleep;
-use std::time::Duration;
-use embedded_dht_rs::dht22::Dht22;
-use esp_idf_svc::hal::delay::Delay;
+mod sensor;
+
 use esp_idf_svc::hal::gpio::PinDriver;
 use esp_idf_svc::hal::peripherals::Peripherals;
+use std::thread::sleep;
+use std::time::Duration;
 
+use crate::sensor::SmartSensor;
 use log::info;
 
 fn main() {
@@ -19,13 +20,12 @@ fn main() {
 
     let pin = PinDriver::input_output_od(peripherals.pins.gpio2).unwrap();
 
-    let mut dht22 = Dht22::new(pin, Delay::default());
-
+    let mut smart_sensor = SmartSensor::new(pin);
     info!("Hello, world!");
     loop {
         sleep(Duration::from_secs(1));
 
-        match dht22.read() {
+        match smart_sensor.read() {
             Ok(sensor_reading) => log::info!(
                 "DHT 22 Sensor - Temperature: {} °C, humidity: {} %",
                 sensor_reading.temperature,
