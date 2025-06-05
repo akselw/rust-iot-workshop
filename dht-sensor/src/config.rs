@@ -4,6 +4,6 @@ pub struct Config {
 }
 
 pub const APP_CONFIG: Config = Config {
-    wifi_ssid: "",
-    wifi_pwd: "",
+    wifi_ssid: "Arve TLFsen",
+    wifi_pwd: "ethernot",
 };
