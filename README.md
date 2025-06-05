@@ -203,9 +203,142 @@ fn main() {
 
 </details>
 
-## Part 2: Writing our own "driver"
+## Part 2: Creating our own "smart" sensor
+
+Now that we have a working DHT sensor, we can start creating our smart sensor. The general idea is to be able to access our sensor data via internet. The first step towards this is to create our own struct that receives a GPIO pin and creates a DHT instance and exposes a `read`-method.
+
+To start, create a new module [`sensor`](./dht-sensor/sensor.rs).
+This module will house our logic for reading data from the sensor itself.
+
+Create a struct `SmartSensor` with a `new`-method and a `read`-method. The `read`-method should return the sensor data.
+
+<details> 
+<summary> Solution💡</summary>
+
+```rust
+//dht_sensor/sensor.rs
+use embedded_dht_rs::{dht22::Dht22, SensorError, SensorReading};
+use embedded_hal::{
+    delay::DelayNs,
+    digital::{InputPin, OutputPin},
+};
+
+pub struct SmartSensor<P: InputPin + OutputPin, D: DelayNs> {
+    sensor: Dht22<P, D>,
+}
+
+impl<P: InputPin + OutputPin, D: DelayNs> SmartSensor<P, D> {
+    pub fn new(pin: P, delay: D) -> Self {
+        Self {
+            sensor: Dht22::new(pin, delay),
+        }
+    }
+
+    pub fn read(&mut self) -> Result<SensorReading<f32>, SensorError> {
+        self.sensor.read()
+    }
+}
+```
+
+Then main has a simple update like so:
+
+```rust
+let mut sensor = SmartSensor::new(pin, delay);
+```
+
+</details>
 
 ## Part 3: Running our web server
+
+Now that we have created our smart sensor package we can start making it "smart". The next step is to make our smart sensor run a http server that we can reach from our computer. Lets create a `run` method that starts a server with a simple alive endpoint on `/alive`.
+
+But first, we need to connect to Wi-Fi. You should use a personal hotspot from your mobile phone and connect _both_ your computer and the controller to the same network. This way we will be able to communicate through that network to/and from our controller. We've created a Wi-Fi module to make it simpler to connect to a network, so you just need to fill in the SSID and password, and add the `wifi::connect()`-call to the `main`-function. Fill inn the SSID and password in the config in [config.rs](./dht-sensor/src/config.rs).
+Use this snippet to make it work:
+
+```rust
+let sysloop = EspSystemEventLoop::take()?;
+
+println!("{:?}: {:?}", APP_CONFIG.wifi_ssid, APP_CONFIG.wifi_ssid);
+
+let _wifi = match connect(
+    APP_CONFIG.wifi_ssid,
+    APP_CONFIG.wifi_pwd,
+    peripherals.modem,
+    sysloop,
+) {
+    Ok(inner) => {
+        println!("Connected to Wi-Fi network!");
+        inner
+    }
+    Err(err) => {
+        // Red!
+        bail!("Could not connect to Wi-Fi network: {:?}", err)
+    }
+};
+```
+
+<details> 
+<summary>Solution💡 </summary>
+
+```rust
+use embedded_dht_rs::{dht22::Dht22, SensorError, SensorReading};
+use embedded_hal::{
+    delay::DelayNs,
+    digital::{InputPin, OutputPin},
+};
+use esp_idf_svc::{
+    http::{
+        server::{Configuration, EspHttpServer},
+        Method,
+    },
+    io::{EspIOError, Write},
+};
+use std::{thread::sleep, time::Duration};
+
+pub struct SmartSensor<P: InputPin + OutputPin, D: DelayNs> {
+    sensor: Dht22<P, D>,
+}
+
+impl<P: InputPin + OutputPin, D: DelayNs> SmartSensor<P, D> {
+    pub fn new(pin: P, delay: D) -> Self {
+        Self {
+            sensor: Dht22::new(pin, delay),
+        }
+    }
+
+    pub fn run(&mut self, port: u16) -> Result<(), EspIOError> {
+        let conf = Configuration {
+            http_port: port,
+            ..Default::default()
+        };
+        let mut server = EspHttpServer::new(&conf)?;
+        server.fn_handler(
+            "/alive",
+            Method::Get,
+            |request| -> core::result::Result<(), EspIOError> {
+                let mut response = request.into_ok_response()?;
+                let res_text = "alive";
+                response.write_all(res_text.as_bytes())?;
+                Ok(())
+            },
+        )?;
+
+        println!("running server");
+
+        loop {
+            sleep(Duration::from_secs(1));
+        }
+
+        Ok(())
+    }
+
+    pub fn read(&mut self) -> Result<SensorReading<f32>, SensorError> {
+        self.sensor.read()
+    }
+}
+```
+
+</details>
 
 ## Part 4: Get measurements from server
 
