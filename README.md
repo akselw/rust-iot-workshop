@@ -342,4 +342,115 @@ impl<P: InputPin + OutputPin, D: DelayNs> SmartSensor<P, D> {
 
 ## Part 4: Get measurements from server
 
-## Part 5: (Optional) Measurements SSE?
+Let's make our sensor _smarter_!
+
+Add an HTTP server that has two endpoints:
+
+- `/alive`, a health-check endpoint that just returns 200 OK
+- `/measurement`, an endpoint that spits out the readings, just as text for now.
+
+Having these two endpoints, we can use e.g. Postman to request data from the controller`. While testing, you'll need to get the ip-address from the log to use as a host, so ensure your computer is connected to the same Wi-Fi as the controller.
+
+The ESP crate (`esp_idf_svc`) has a HTTP Server implementation that we can use. Use `cargo doc --open` and search for `EspHttpServer` for more info.
+
+Add the two handlers inside `SmartSensor::run`.
+
+You'll notice a problem with trying to read sensor data from inside the endpoint handler. `Dht22` is not `Send`, so you'll need to [wrap the sensor reader somehow...](https://itsallaboutthebit.com/arc-mutex/)
+
+<details>
+<summary>Solution 💡</summary>
+
+```rust
+use embedded_dht_rs::{dht22::Dht22, SensorError, SensorReading};
+use embedded_hal::{
+    delay::DelayNs,
+    digital::{InputPin, OutputPin},
+};
+use esp_idf_svc::{
+    http::{
+        server::{Configuration, EspHttpServer},
+        Method,
+    },
+    io::{EspIOError, Write},
+};
+use std::{
+    sync::{Arc, Mutex},
+    thread::sleep,
+    time::Duration,
+};
+
+pub struct SmartSensor<P: InputPin + OutputPin, D: DelayNs> {
+    sensor: Dht22<P, D>,
+}
+
+impl<P: InputPin + OutputPin, D: DelayNs> SmartSensor<P, D> {
+    pub fn new(pin: P, delay: D) -> Self {
+        Self {
+            sensor: Dht22::new(pin, delay),
+        }
+    }
+
+    pub fn run(&mut self, port: u16) -> Result<(), EspIOError> {
+        let conf = Configuration {
+            http_port: port,
+            ..Default::default()
+        };
+
+        let reading = self.read().unwrap();
+        let shared_reading = Arc::new(Mutex::new(reading));
+        let shared_reading_cloned = shared_reading.clone();
+
+        let mut server = EspHttpServer::new(&conf)?;
+        server.fn_handler(
+            "/alive",
+            Method::Get,
+            |request| -> core::result::Result<(), EspIOError> {
+                let mut response = request.into_ok_response()?;
+                let res_text = "alive";
+                response.write_all(res_text.as_bytes())?;
+                Ok(())
+            },
+        )?;
+        server.fn_handler(
+            "/measurement",
+            Method::Get,
+            move |request| -> core::result::Result<(), EspIOError> {
+                let mut response = request.into_ok_response()?;
+                let reading_ref = &shared_reading_cloned;
+                let reading = reading_ref.lock().unwrap();
+                let res_text = format!("{}°C, {}% RH", reading.temperature, reading.humidity);
+                response.write_all(res_text.as_bytes())?;
+                Ok(())
+            },
+        )?;
+
+        println!("running server");
+
+        loop {
+            let Ok(res) = self.read() else {
+                sleep(Duration::from_millis(250));
+                continue;
+            };
+            *shared_reading.lock().unwrap() = res;
+            // let mut reading = *shared_reading.get_mut().unwrap();
+            sleep(Duration::from_secs(1));
+        }
+
+        Ok(())
+    }
+
+    pub fn read(&mut self) -> Result<SensorReading<f32>, SensorError> {
+        self.sensor.read()
+    }
+}
+```
+
+</details>
+
+## Part 5: (Optional) Rewrite to SPMC
+
+It doesn't make complete sense to have the `Arc<Mutex<T>>` in our sensor, so we should probably rewrite it so that we use the single-producer, multiple consumer-pattern (SPMC). That way we could split the server and smart sensor parts.
+
+## Part 6: (Optional) Measurements SSE
+
+Rewrite the server so that is uses [server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events) to stream readings live.
